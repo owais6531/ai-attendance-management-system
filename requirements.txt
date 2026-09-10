@@ -1,0 +1,21 @@
+# FastAPI and web server dependencies
+fastapi==0.129.0
+uvicorn[standard]==0.31.1
+jinja2==3.1.6
+python-multipart==0.0.22
+
+# Configuration
+python-dotenv==1.1.1
+
+# Data processing dependencies
+pandas==2.3.2
+openpyxl==3.1.5
+xlrd==2.0.2
+
+# Database dependencies
+sqlalchemy==2.0.41
+psycopg2-binary==2.9.10
+alembic==1.16.4
+
+# Additional utilities
+python-dateutil==2.9.0.post0

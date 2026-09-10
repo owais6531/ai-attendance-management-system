@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Data Upload - Bilal Attendance System</title>
+    <link rel="stylesheet" href="/static/css/upload.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📊 Attendance Data Upload</h1>
+            <p>Upload Excel or CSV files containing employee attendance records</p>
+        </header>
+
+        <div class="upload-section">
+            <div class="upload-card">
+                <div class="upload-header">
+                    <h2>📁 Select File</h2>
+                    <button id="downloadTemplate" class="template-btn">
+                        📥 Download Template
+                    </button>
+                </div>
+                
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="file-input-wrapper">
+                        <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" required>
+                        <label for="fileInput" class="file-input-label">
+                            <span class="file-icon">📄</span>
+                            <span class="file-text">Choose Excel or CSV file</span>
+                        </label>
+                    </div>
+                    
+                    <div class="file-info" id="fileInfo" style="display: none;">
+                        <span class="file-name" id="fileName"></span>
+                        <span class="file-size" id="fileSize"></span>
+                    </div>
+                    
+                    <button type="submit" id="uploadBtn" class="upload-btn" disabled>
+                        🚀 Upload & Process
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-card">
+                <h3>⏳ Processing...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Uploading file...</p>
+            </div>
+        </div>
+
+        <div class="result-section" id="resultSection" style="display: none;">
+            <div class="result-card">
+                <div class="result-header" id="resultHeader">
+                    <h3 id="resultTitle"></h3>
+                    <div class="result-stats" id="resultStats"></div>
+                </div>
+                
+                <div class="result-content">
+                    <div class="result-message" id="resultMessage"></div>
+                    
+                    <div class="errors-section" id="errorsSection" style="display: none;">
+                        <h4>❌ Errors Found</h4>
+                        <div class="errors-list" id="errorsList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-preview" id="dataPreview" style="display: none;">
+            <div class="preview-card">
+                <div class="preview-header">
+                    <h3>👀 Data Preview</h3>
+                    <span class="preview-count" id="previewCount"></span>
+                </div>
+                
+                <div class="table-wrapper">
+                    <table class="data-table" id="dataTable">
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions-section" id="actionsSection" style="display: none;">
+            <button id="uploadAnother" class="action-btn secondary">
+                📁 Upload Another File
+            </button>
+            <button id="saveData" class="action-btn primary">
+                💾 Save to Database
+            </button>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2024 Bilal Attendance System. All rights reserved.</p>
+    </footer>
+
+    <script src="/static/js/upload.js"></script>
+</body>
+</html>
