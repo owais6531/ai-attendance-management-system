@@ -1,4 +1,4 @@
-# FastAPI and web server dependencies
+# Web server
 fastapi==0.129.0
 uvicorn[standard]==0.31.1
 jinja2==3.1.6
@@ -7,15 +7,19 @@ python-multipart==0.0.22
 # Configuration
 python-dotenv==1.1.1
 
-# Data processing dependencies
+# Spreadsheet processing
 pandas==2.3.2
 openpyxl==3.1.5
 xlrd==2.0.2
 
-# Database dependencies
+# Database (SQLite is built in; drivers for MySQL/MariaDB and PostgreSQL)
 sqlalchemy==2.0.41
-psycopg2-binary==2.9.10
 alembic==1.16.4
+PyMySQL==1.1.1
+psycopg2-binary==2.9.10
 
-# Additional utilities
+# cPanel / Passenger (WSGI) shared hosting bridge
+a2wsgi==1.10.8
+
+# Utilities
 python-dateutil==2.9.0.post0

@@ -1,320 +1,170 @@
-// Upload functionality for attendance data
-class AttendanceUploader {
-    constructor() {
-        this.initializeElements();
-        this.bindEvents();
-        this.uploadedData = null;
+// Attendance upload page. All file data is rendered with textContent (never innerHTML).
+(() => {
+    const $ = (id) => document.getElementById(id);
+    const form = $('uploadForm');
+    const fileInput = $('fileInput');
+    const dropzone = $('dropzone');
+    const uploadBtn = $('uploadBtn');
+    const checkBtn = $('checkBtn');
+    const statusEl = $('status');
+    const apiKeyInput = $('apiKey');
+    let lastErrors = [];
+
+    const KEY_STORE = 'attendance_api_key';
+    if (apiKeyInput) {
+        try { apiKeyInput.value = sessionStorage.getItem(KEY_STORE) || ''; } catch (_) { /* storage blocked */ }
     }
 
-    initializeElements() {
-        // Form elements
-        this.uploadForm = document.getElementById('uploadForm');
-        this.fileInput = document.getElementById('fileInput');
-        this.uploadBtn = document.getElementById('uploadBtn');
-        this.downloadTemplateBtn = document.getElementById('downloadTemplate');
-        
-        // Info elements
-        this.fileInfo = document.getElementById('fileInfo');
-        this.fileName = document.getElementById('fileName');
-        this.fileSize = document.getElementById('fileSize');
-        
-        // Progress elements
-        this.progressSection = document.getElementById('progressSection');
-        this.progressFill = document.getElementById('progressFill');
-        this.progressText = document.getElementById('progressText');
-        
-        // Result elements
-        this.resultSection = document.getElementById('resultSection');
-        this.resultHeader = document.getElementById('resultHeader');
-        this.resultTitle = document.getElementById('resultTitle');
-        this.resultStats = document.getElementById('resultStats');
-        this.resultMessage = document.getElementById('resultMessage');
-        this.errorsSection = document.getElementById('errorsSection');
-        this.errorsList = document.getElementById('errorsList');
-        
-        // Preview elements
-        this.dataPreview = document.getElementById('dataPreview');
-        this.previewCount = document.getElementById('previewCount');
-        this.dataTable = document.getElementById('dataTable');
-        this.tableHead = document.getElementById('tableHead');
-        this.tableBody = document.getElementById('tableBody');
-        
-        // Action elements
-        this.actionsSection = document.getElementById('actionsSection');
-        this.uploadAnotherBtn = document.getElementById('uploadAnother');
-        this.saveDataBtn = document.getElementById('saveData');
-    }
+    const formatSize = (bytes) => {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${(bytes / 1024 ** i).toFixed(i ? 1 : 0)} ${units[i]}`;
+    };
 
-    bindEvents() {
-        this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        this.uploadForm.addEventListener('submit', (e) => this.handleUpload(e));
-        this.downloadTemplateBtn.addEventListener('click', () => this.downloadTemplate());
-        this.uploadAnotherBtn.addEventListener('click', () => this.resetForm());
-        this.saveDataBtn.addEventListener('click', () => this.saveToDatabase());
-    }
+    const setStatus = (text, isError = false) => {
+        statusEl.textContent = text;
+        statusEl.classList.toggle('error', isError);
+    };
 
-    handleFileSelect(event) {
-        const file = event.target.files[0];
-        
-        if (file) {
-            // Validate file type
-            const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-                              'application/vnd.ms-excel', 'text/csv', 'application/csv'];
-            const validExtensions = ['xlsx', 'xls', 'csv'];
-            const fileExtension = file.name.split('.').pop().toLowerCase();
-            
-            if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-                this.showError('Please select a valid Excel (.xlsx, .xls) or CSV (.csv) file.');
-                this.resetFileInput();
+    const onFileChosen = () => {
+        const file = fileInput.files[0];
+        const ok = !!file && /\.(xlsx|xls|csv)$/i.test(file.name);
+        $('dzTitle').textContent = file ? file.name : 'Drop a file here or click to browse';
+        $('dzSub').textContent = file ? formatSize(file.size) : '.xlsx, .xls or .csv';
+        uploadBtn.disabled = checkBtn.disabled = !ok;
+        setStatus(file && !ok ? 'Please choose an Excel (.xlsx, .xls) or CSV (.csv) file.' : '', file && !ok);
+        $('resultCard').hidden = true;
+    };
+
+    fileInput.addEventListener('change', onFileChosen);
+    ['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, () => dropzone.classList.add('dragover')));
+    ['dragleave', 'drop'].forEach((ev) => dropzone.addEventListener(ev, () => dropzone.classList.remove('dragover')));
+
+    async function send(dryRun) {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const body = new FormData();
+        body.append('file', file);
+        body.append('date_order', $('dateOrder').value);
+        body.append('dry_run', dryRun ? 'true' : 'false');
+
+        const headers = {};
+        if (apiKeyInput && apiKeyInput.value) {
+            headers['X-API-Key'] = apiKeyInput.value;
+            try { sessionStorage.setItem(KEY_STORE, apiKeyInput.value); } catch (_) { /* ignore */ }
+        }
+
+        uploadBtn.disabled = checkBtn.disabled = true;
+        setStatus(dryRun ? 'Checking file…' : 'Uploading and saving…');
+        try {
+            const res = await fetch('/upload/attendance', { method: 'POST', body, headers });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const detail = typeof data.detail === 'string' ? data.detail
+                    : Array.isArray(data.detail) ? data.detail.map((d) => d.msg).join('; ')
+                    : `Server returned ${res.status}`;
+                setStatus(res.status === 401 ? 'API key is missing or wrong.' : detail, true);
                 return;
             }
-            
-            // Show file info
-            this.fileName.textContent = file.name;
-            this.fileSize.textContent = this.formatFileSize(file.size);
-            this.fileInfo.style.display = 'flex';
-            this.uploadBtn.disabled = false;
-            
-            // Hide previous results
-            this.hideResults();
-        } else {
-            this.resetFileInput();
-        }
-    }
-
-    async handleUpload(event) {
-        event.preventDefault();
-        
-        const file = this.fileInput.files[0];
-        if (!file) {
-            this.showError('Please select a file first.');
-            return;
-        }
-        
-        this.showProgress();
-        
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const response = await fetch('/upload/attendance', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.uploadedData = result.data;
-                this.showSuccess(result.message, result.records_processed || 0);
-                // Don't call showResults for successful uploads, showSuccess is enough
-            } else {
-                this.showError(result.message, result.error);
-            }
-            
-        } catch (error) {
-            this.showError('Upload failed', `Network error: ${error.message}`);
+            setStatus('');
+            showResult(data, dryRun);
+        } catch (err) {
+            setStatus(`Network error: ${err.message}`, true);
         } finally {
-            this.hideProgress();
+            uploadBtn.disabled = checkBtn.disabled = !fileInput.files[0];
         }
     }
 
-    async downloadTemplate() {
-        try {
-            const response = await fetch('/upload/template');
-            
-            if (!response.ok) {
-                throw new Error('Failed to download template');
-            }
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'attendance_template.xlsx';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-        } catch (error) {
-            this.showError(`Failed to download template: ${error.message}`);
-        }
+    form.addEventListener('submit', (e) => { e.preventDefault(); send(false); });
+    checkBtn.addEventListener('click', () => send(true));
+    $('resetBtn').addEventListener('click', () => {
+        form.reset();
+        onFileChosen();
+        if (apiKeyInput) { try { apiKeyInput.value = sessionStorage.getItem(KEY_STORE) || ''; } catch (_) { /* */ } }
+    });
+
+    function cell(tag, text, cls) {
+        const el = document.createElement(tag);
+        el.textContent = text == null ? '' : String(text);
+        if (cls) el.className = cls;
+        return el;
     }
 
-    showProgress() {
-        this.progressSection.style.display = 'block';
-        this.uploadBtn.disabled = true;
-        this.progressText.textContent = 'Uploading file...';
-        
-        // Simulate progress
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += Math.random() * 30;
-            if (progress > 90) progress = 90;
-            this.progressFill.style.width = `${progress}%`;
-            
-            if (progress > 30) this.progressText.textContent = 'Processing data...';
-            if (progress > 60) this.progressText.textContent = 'Validating records...';
-        }, 200);
-        
-        this.progressInterval = interval;
-    }
-
-    hideProgress() {
-        if (this.progressInterval) {
-            clearInterval(this.progressInterval);
-        }
-        this.progressFill.style.width = '100%';
-        setTimeout(() => {
-            this.progressSection.style.display = 'none';
-            this.uploadBtn.disabled = false;
-        }, 500);
-    }
-
-    showResults(result) {
-        // Show result section
-        this.resultSection.style.display = 'block';
-        
-        // Set title and stats
-        if (result.success) {
-            this.resultTitle.innerHTML = '✅ Upload Successful';
-            this.resultHeader.className = 'result-header success';
-        } else {
-            this.resultTitle.innerHTML = '❌ Upload Failed';
-            this.resultHeader.className = 'result-header error';
-        }
-        
-        // Show statistics
-        this.resultStats.innerHTML = `
-            <div class="stat">
-                <span class="stat-label">Total Records:</span>
-                <span class="stat-value">${result.total_records}</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Processed:</span>
-                <span class="stat-value">${result.processed_records}</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Errors:</span>
-                <span class="stat-value">${result.error_count}</span>
-            </div>
-        `;
-        
-        // Show message
-        this.resultMessage.textContent = result.message;
-        
-        // Show errors if any
-        if (result.errors && result.errors.length > 0) {
-            this.showErrors(result.errors);
-        }
-        
-        // Show data preview if successful
-        if (result.success && result.records && result.records.length > 0) {
-            this.showDataPreview(result.records);
-            this.actionsSection.style.display = 'block';
-        }
-    }
-
-    showErrors(errors) {
-        this.errorsSection.style.display = 'block';
-        this.errorsList.innerHTML = '';
-        
-        errors.forEach(error => {
-            const errorItem = document.createElement('div');
-            errorItem.className = 'error-item';
-            errorItem.innerHTML = `
-                <div class="error-row">Row ${error.row}</div>
-                <div class="error-message">${error.error}</div>
-            `;
-            this.errorsList.appendChild(errorItem);
+    function fillTable(table, headers, rows) {
+        table.replaceChildren();
+        const thead = document.createElement('thead');
+        const hr = document.createElement('tr');
+        headers.forEach((h) => hr.appendChild(cell('th', h)));
+        thead.appendChild(hr);
+        const tbody = document.createElement('tbody');
+        rows.forEach((r) => {
+            const tr = document.createElement('tr');
+            r.forEach((v) => tr.appendChild(v instanceof HTMLElement ? v : cell('td', v)));
+            tbody.appendChild(tr);
         });
+        table.append(thead, tbody);
     }
 
-    showDataPreview(records) {
-        this.dataPreview.style.display = 'block';
-        this.previewCount.textContent = `Showing ${Math.min(records.length, 10)} of ${records.length} records`;
-        
-        // Create table headers
-        const headers = ['No', 'DN', 'UID', 'Name', 'Status', 'Action', 'APB', 'Job Code', 'Date Time'];
-        this.tableHead.innerHTML = `
-            <tr>
-                ${headers.map(header => `<th>${header}</th>`).join('')}
-            </tr>
-        `;
-        
-        // Create table rows (show first 10 records)
-        this.tableBody.innerHTML = '';
-        const previewRecords = records.slice(0, 10);
-        
-        previewRecords.forEach(record => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${record.no}</td>
-                <td>${record.dn}</td>
-                <td>${record.uid}</td>
-                <td>${record.name}</td>
-                <td><span class="status-badge ${record.status.toLowerCase()}">${record.status}</span></td>
-                <td>${record.action}</td>
-                <td>${record.apb}</td>
-                <td>${record.job_code}</td>
-                <td>${new Date(record.date_time).toLocaleString()}</td>
-            `;
-            this.tableBody.appendChild(row);
-        });
-    }
+    function showResult(data, dryRun) {
+        $('resultCard').hidden = false;
+        $('resultTitle').textContent = dryRun ? 'Check result (nothing saved)' : 'Upload result';
 
-    saveToDatabase() {
-        // This would typically send the data to a save endpoint
-        // For now, we'll just show a success message
-        alert('Data saved to database successfully! (This is a demo - implement actual save functionality)');
-    }
+        const msg = $('resultMessage');
+        msg.textContent = data.message;
+        const nothingGood = dryRun ? data.valid_records === 0 : data.saved === 0 && data.duplicates_skipped === 0;
+        msg.className = 'result-message ' + (nothingGood ? 'err' : data.failed_imports ? 'warn' : 'ok');
 
-    resetForm() {
-        this.uploadForm.reset();
-        this.resetFileInput();
-        this.hideResults();
-        this.uploadedData = null;
-    }
+        const stats = [
+            ['Rows in file', data.total_records],
+            ['Valid rows', data.valid_records],
+            dryRun ? null : ['Saved', data.saved],
+            dryRun ? null : ['Duplicates skipped', data.duplicates_skipped],
+            ['Rows with errors', data.failed_imports],
+        ].filter(Boolean);
+        const statsEl = $('stats');
+        statsEl.replaceChildren(...stats.map(([label, value]) => {
+            const box = cell('div', '', 'stat');
+            box.append(cell('div', value, 'stat-value'), cell('div', label, 'stat-label'));
+            return box;
+        }));
 
-    resetFileInput() {
-        this.fileInfo.style.display = 'none';
-        this.uploadBtn.disabled = true;
-    }
-
-    hideResults() {
-        this.resultSection.style.display = 'none';
-        this.errorsSection.style.display = 'none';
-        this.dataPreview.style.display = 'none';
-        this.actionsSection.style.display = 'none';
-    }
-
-    showError(message, details = null) {
-        let errorMsg = `❌ ${message}`;
-        if (details) {
-            errorMsg += `\n\nDetails: ${details}`;
+        lastErrors = data.errors || [];
+        $('errorsBlock').hidden = lastErrors.length === 0;
+        if (lastErrors.length) {
+            $('errorsHint').textContent = data.errors_truncated
+                ? `Showing the first ${lastErrors.length} of ${data.failed_imports} errors. Fix them in the file and upload again — rows already saved will be skipped.`
+                : 'Fix these rows in your file and upload again. Rows already saved will be skipped automatically.';
+            fillTable($('errorsTable'), ['Row', 'Problem', 'UID', 'Name', 'DateTime'],
+                lastErrors.map((e) => [e.row, cell('td', e.error, 'err'), e.data?.UID, e.data?.Name, e.data?.DateTime]));
         }
-        alert(errorMsg);
-    }
 
-    showSuccess(message, recordCount = 0) {
-        let successMsg = `✅ ${message}`;
-        if (recordCount > 0) {
-            successMsg += `\n\nRecords processed: ${recordCount}`;
+        const preview = data.preview || [];
+        $('previewBlock').hidden = preview.length === 0;
+        if (preview.length) {
+            fillTable($('previewTable'), ['No', 'DN', 'UID', 'Name', 'Status', 'Action', 'APB', 'Job code', 'Date & time'],
+                preview.map((r) => [r.no, r.dn, r.uid, r.name, r.status, r.action, r.apb, r.job_code, r.date_time]));
         }
-        alert(successMsg);
     }
 
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-}
-
-// Initialize the uploader when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new AttendanceUploader();
-});
+    $('downloadErrors').addEventListener('click', () => {
+        if (!lastErrors.length) return;
+        const cols = Array.from(new Set(lastErrors.flatMap((e) => Object.keys(e.data || {}))));
+        const esc = (v) => {
+            const s = v == null ? '' : String(v);
+            // Prefix formula-like values so spreadsheets don't execute them.
+            const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+            return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+        };
+        const lines = [['Row', 'Error', ...cols].map(esc).join(',')]
+            .concat(lastErrors.map((e) => [e.row, e.error, ...cols.map((c) => e.data?.[c])].map(esc).join(',')));
+        const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'attendance_errors.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+    });
+})();

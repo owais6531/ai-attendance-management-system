@@ -1,28 +1,41 @@
-from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
 
 class AttendanceRecord(BaseModel):
-    """Model for attendance log records"""
-    model_config = ConfigDict(
-        json_encoders={datetime: lambda v: v.strftime("%d-%m-%y %H:%M")}
-    )
+    """One validated punch row from an uploaded file."""
 
     no: int = Field(..., description="Record number")
     dn: int = Field(..., description="Device number")
-    uid: int = Field(..., description="User ID")
-    name: str = Field(..., description="Employee name")
+    uid: str = Field(..., min_length=1, description="Employee / user code (leading zeros kept)")
+    name: str = Field("", description="Employee name")
     status: int = Field(..., description="Status code")
     action: int = Field(..., description="Action code")
     apb: int = Field(..., description="APB code")
     job_code: int = Field(..., description="Job code")
-    date_time: str = Field(..., description="Date and time")
+    punch_at: datetime = Field(..., description="Punch date and time")
+    date_time: str = Field(..., description="Punch date and time as YYYY/MM/DD HH:MM:SS")
+
+
+class RowError(BaseModel):
+    row: int | str
+    error: str
+    data: dict[str, Any] = {}
+
 
 class UploadResponse(BaseModel):
-    """Response model for upload operations"""
+    """Result of an upload. ``saved`` is what actually reached the database."""
+
     message: str
+    file_name: str
     total_records: int
-    successful_imports: int
+    valid_records: int
+    saved: int
+    duplicates_skipped: int
     failed_imports: int
-    errors: Optional[list] = []
+    errors: list[RowError] = []
+    errors_truncated: bool = False
+    preview: list[AttendanceRecord] = []
     batch_id: Optional[str] = None
