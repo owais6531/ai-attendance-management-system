@@ -9,23 +9,24 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
+          cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run tests
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: attendanceapp_test
-          DB_USER: postgres
-          DB_PASSWORD: test-password
+      - name: Run tests (throwaway SQLite database)
         run: pytest -v
+
+      - name: Demo data generator works
+        run: python scripts/generate_demo_data.py --employees 5 --out /tmp/demo

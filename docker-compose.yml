@@ -20,11 +20,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-attendanceapp}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in your .env file}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:?set DB_PASSWORD in your .env file}@db:5432/${DB_NAME:-attendanceapp}
       API_KEY: ${API_KEY:-}
     depends_on:
       db:

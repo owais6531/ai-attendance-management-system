@@ -3,104 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance Data Upload - Bilal Attendance System</title>
+    <title>Upload Attendance · {{ app_name }}</title>
+    <meta name="description" content="Upload biometric or Excel attendance files, validate every row and store them safely.">
     <link rel="stylesheet" href="/static/css/upload.css">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <h1>📊 Attendance Data Upload</h1>
-            <p>Upload Excel or CSV files containing employee attendance records</p>
-        </header>
+<main class="container">
+    <header class="header">
+        <h1>{{ app_name }}</h1>
+        <p>Upload Excel or CSV attendance exports. Every row is checked; duplicates are skipped automatically.</p>
+    </header>
 
-        <div class="upload-section">
-            <div class="upload-card">
-                <div class="upload-header">
-                    <h2>📁 Select File</h2>
-                    <button id="downloadTemplate" class="template-btn">
-                        📥 Download Template
-                    </button>
-                </div>
-                
-                <form id="uploadForm" enctype="multipart/form-data">
-                    <div class="file-input-wrapper">
-                        <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" required>
-                        <label for="fileInput" class="file-input-label">
-                            <span class="file-icon">📄</span>
-                            <span class="file-text">Choose Excel or CSV file</span>
-                        </label>
-                    </div>
-                    
-                    <div class="file-info" id="fileInfo" style="display: none;">
-                        <span class="file-name" id="fileName"></span>
-                        <span class="file-size" id="fileSize"></span>
-                    </div>
-                    
-                    <button type="submit" id="uploadBtn" class="upload-btn" disabled>
-                        🚀 Upload & Process
-                    </button>
-                </form>
+    <section class="card">
+        <div class="card-head">
+            <h2>1. Choose a file</h2>
+            <a class="btn btn-ghost" href="/upload/template" download>Download template</a>
+        </div>
+
+        <form id="uploadForm">
+            <label class="dropzone" id="dropzone" for="fileInput">
+                <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" required>
+                <span class="dz-title" id="dzTitle">Drop a file here or click to browse</span>
+                <span class="dz-sub" id="dzSub">.xlsx, .xls or .csv</span>
+            </label>
+
+            <div class="options">
+                <label>Date format in file
+                    <select id="dateOrder" name="date_order">
+                        <option value="DMY" selected>Day first (03/04/2025 = 3 April)</option>
+                        <option value="MDY">Month first (03/04/2025 = March 4)</option>
+                    </select>
+                </label>
+                {% if auth_required %}
+                <label>API key
+                    <input type="password" id="apiKey" autocomplete="off" placeholder="Required on this server">
+                </label>
+                {% endif %}
             </div>
-        </div>
 
-        <div class="progress-section" id="progressSection" style="display: none;">
-            <div class="progress-card">
-                <h3>⏳ Processing...</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <p class="progress-text" id="progressText">Uploading file...</p>
+            <div class="actions">
+                <button type="button" id="checkBtn" class="btn btn-secondary" disabled>Check only</button>
+                <button type="submit" id="uploadBtn" class="btn btn-primary" disabled>Upload &amp; save</button>
             </div>
-        </div>
+        </form>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+    </section>
 
-        <div class="result-section" id="resultSection" style="display: none;">
-            <div class="result-card">
-                <div class="result-header" id="resultHeader">
-                    <h3 id="resultTitle"></h3>
-                    <div class="result-stats" id="resultStats"></div>
-                </div>
-                
-                <div class="result-content">
-                    <div class="result-message" id="resultMessage"></div>
-                    
-                    <div class="errors-section" id="errorsSection" style="display: none;">
-                        <h4>❌ Errors Found</h4>
-                        <div class="errors-list" id="errorsList"></div>
-                    </div>
-                </div>
+    <section class="card" id="resultCard" hidden>
+        <div class="card-head">
+            <h2 id="resultTitle">Result</h2>
+            <button type="button" id="resetBtn" class="btn btn-ghost">Upload another file</button>
+        </div>
+        <p id="resultMessage" class="result-message"></p>
+        <div class="stats" id="stats"></div>
+
+        <div id="errorsBlock" hidden>
+            <div class="card-head">
+                <h3>Rows with errors</h3>
+                <button type="button" id="downloadErrors" class="btn btn-ghost">Download errors (CSV)</button>
             </div>
+            <p class="hint" id="errorsHint"></p>
+            <div class="table-wrap"><table class="table" id="errorsTable"></table></div>
         </div>
 
-        <div class="data-preview" id="dataPreview" style="display: none;">
-            <div class="preview-card">
-                <div class="preview-header">
-                    <h3>👀 Data Preview</h3>
-                    <span class="preview-count" id="previewCount"></span>
-                </div>
-                
-                <div class="table-wrapper">
-                    <table class="data-table" id="dataTable">
-                        <thead id="tableHead"></thead>
-                        <tbody id="tableBody"></tbody>
-                    </table>
-                </div>
-            </div>
+        <div id="previewBlock" hidden>
+            <h3>Preview of valid rows</h3>
+            <div class="table-wrap"><table class="table" id="previewTable"></table></div>
         </div>
+    </section>
+</main>
 
-        <div class="actions-section" id="actionsSection" style="display: none;">
-            <button id="uploadAnother" class="action-btn secondary">
-                📁 Upload Another File
-            </button>
-            <button id="saveData" class="action-btn primary">
-                💾 Save to Database
-            </button>
-        </div>
-    </div>
+<footer class="footer">
+    <p>&copy; {{ year }} {{ app_name }} · <a href="/docs">API docs</a></p>
+</footer>
 
-    <footer class="footer">
-        <p>&copy; 2024 Bilal Attendance System. All rights reserved.</p>
-    </footer>
-
-    <script src="/static/js/upload.js"></script>
+<script src="/static/js/upload.js"></script>
 </body>
 </html>
