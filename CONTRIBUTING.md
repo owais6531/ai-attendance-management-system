@@ -5,7 +5,7 @@ Thanks for helping! Bug reports, device export samples (with **fake** data), doc
 ## Ground rules
 - **Never commit real employee data**, CNIC/ID numbers, salaries or phone numbers. Use
   `scripts/generate_demo_data.py` or clearly fake values.
-- **No paid API keys or secrets** in code, tests or issues. AI features use local Ollama models.
+- **No API keys or secrets** in code, tests or issues. AI features must work with local Ollama and stay optional; tests never call a real AI service.
 - One focused change per pull request, with a test.
 
 ## Setup

@@ -12,13 +12,14 @@ from fastapi.templating import Jinja2Templates
 from config.auth import auth_enabled
 from config.database import DATABASE_URL, run_migrations, safe_url, test_connection
 from routes.database_routes import router as database_router
+from routes.import_routes import router as import_router
 from routes.upload_routes import router as upload_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 APP_NAME = os.getenv("APP_NAME", "AI Attendance Management System")
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 
 
 def _env_true(name: str, default: str = "True") -> bool:
@@ -45,6 +46,7 @@ app = FastAPI(
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+app.include_router(import_router)
 app.include_router(upload_router)
 app.include_router(database_router)
 
@@ -79,7 +81,11 @@ async def app_info():
         "name": APP_NAME,
         "version": APP_VERSION,
         "features": [
-            "Excel/CSV upload with per-row validation",
+            "Flexible import: any Excel/CSV file, 2 to 100+ columns",
+            "Three file shapes: punch log, daily sheet, monthly matrix",
+            "Saved import profiles",
+            "Optional local AI column mapping (Ollama)",
+            "Per-row validation with downloadable errors",
             "Duplicate-safe re-uploads",
             "Dry-run (validate without saving)",
             "SQLite, MySQL or PostgreSQL",
