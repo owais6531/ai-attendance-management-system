@@ -24,6 +24,8 @@ def clean_db():
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM attendance_records"))
         conn.execute(text("DELETE FROM upload_batches"))
+        conn.execute(text("DELETE FROM import_profiles"))
+        conn.execute(text("DELETE FROM ai_usage"))
     yield
 
 

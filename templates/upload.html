@@ -3,71 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Attendance · {{ app_name }}</title>
-    <meta name="description" content="Upload biometric or Excel attendance files, validate every row and store them safely.">
+    <title>Import Attendance · {{ app_name }}</title>
+    <meta name="description" content="Import any biometric or Excel attendance file, 2 to 100+ columns. Map the columns once, check every row and store it safely.">
     <link rel="stylesheet" href="/static/css/upload.css">
 </head>
 <body>
 <main class="container">
     <header class="header">
         <h1>{{ app_name }}</h1>
-        <p>Upload Excel or CSV attendance exports. Every row is checked; duplicates are skipped automatically.</p>
+        <p>Import any Excel or CSV attendance file, from 2 columns to 100+. Every row is checked and duplicates are skipped.</p>
     </header>
 
-    <section class="card">
+    <section class="card" id="fileCard">
         <div class="card-head">
             <h2>1. Choose a file</h2>
             <a class="btn btn-ghost" href="/upload/template" download>Download template</a>
         </div>
 
-        <form id="uploadForm">
-            <label class="dropzone" id="dropzone" for="fileInput">
-                <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" required>
-                <span class="dz-title" id="dzTitle">Drop a file here or click to browse</span>
-                <span class="dz-sub" id="dzSub">.xlsx, .xls or .csv</span>
+        <label class="dropzone" id="dropzone" for="fileInput">
+            <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv">
+            <span class="dz-title" id="dzTitle">Drop a file here or click to browse</span>
+            <span class="dz-sub" id="dzSub">.xlsx, .xls or .csv</span>
+        </label>
+
+        {% if auth_required %}
+        <div class="options">
+            <label>API key
+                <input type="password" id="apiKey" autocomplete="off" placeholder="Required on this server">
             </label>
-
-            <div class="options">
-                <label>Date format in file
-                    <select id="dateOrder" name="date_order">
-                        <option value="DMY" selected>Day first (03/04/2025 = 3 April)</option>
-                        <option value="MDY">Month first (03/04/2025 = March 4)</option>
-                    </select>
-                </label>
-                {% if auth_required %}
-                <label>API key
-                    <input type="password" id="apiKey" autocomplete="off" placeholder="Required on this server">
-                </label>
-                {% endif %}
-            </div>
-
-            <div class="actions">
-                <button type="button" id="checkBtn" class="btn btn-secondary" disabled>Check only</button>
-                <button type="submit" id="uploadBtn" class="btn btn-primary" disabled>Upload &amp; save</button>
-            </div>
-        </form>
+        </div>
+        {% endif %}
         <p class="status" id="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card" id="mapCard" hidden>
+        <div class="card-head">
+            <h2>2. Match the columns</h2>
+            <span class="hint" id="fileSummary"></span>
+        </div>
+
+        <p class="notice" id="profileNotice" hidden></p>
+
+        <div class="options options-grid">
+            <label>File layout
+                <select id="shape">
+                    <option value="punch_log">Punch log: one row per punch</option>
+                    <option value="daily">Daily sheet: one row per day, with in and out</option>
+                    <option value="monthly_matrix">Monthly sheet: one column per day</option>
+                </select>
+            </label>
+            <label id="periodLabel" hidden>Month of this file
+                <input type="month" id="period">
+            </label>
+            <label>Date format in file
+                <select id="dateOrder">
+                    <option value="DMY" selected>Day first (03/04/2025 = 3 April)</option>
+                    <option value="MDY">Month first (03/04/2025 = March 4)</option>
+                </select>
+            </label>
+            <label id="sheetLabel" hidden>Sheet
+                <select id="sheet"></select>
+            </label>
+            <label>Headings are on row
+                <input type="number" id="headerRow" min="1" step="1">
+            </label>
+            <label>Saved mapping
+                <select id="profileSelect"><option value="">None</option></select>
+            </label>
+        </div>
+
+        <div class="ai-bar">
+            <button type="button" id="aiBtn" class="btn btn-secondary" disabled>Suggest with AI</button>
+            <span class="hint" id="aiHint"></span>
+        </div>
+        <details class="ai-setup" id="aiSetup">
+            <summary>AI options (optional)</summary>
+            <p class="hint">The app works fully without AI. AI only helps match unusual column headings.</p>
+            <h3>Option 1: free AI on this computer</h3>
+            <p id="specVerdict" class="spec-verdict"></p>
+            <div class="table-wrap"><table class="table" id="specTable"></table></div>
+            <ol class="setup-steps">
+                <li>Download Ollama from <a id="ollamaLink" href="https://ollama.com/download" target="_blank" rel="noopener">ollama.com/download</a> and install it.</li>
+                <li>Run this command once: <code id="pullCommand"></code></li>
+                <li>Open this page again. <strong>Suggest with AI</strong> turns on by itself.</li>
+            </ol>
+            <h3>Option 2: your own API key</h3>
+            <p class="hint">For computers below the minimum. Works with OpenAI-compatible services. The provider may charge you, and it receives the headings and up to 3 sample values of each unmatched column. Add these lines to the <code>.env</code> file, then restart the app:</p>
+            <pre id="apiEnv"></pre>
+        </details>
+
+        <p class="hint" id="dayHint" hidden></p>
+        <div class="table-wrap"><table class="table map-table" id="mapTable"></table></div>
+        <p class="status" id="mapStatus" role="status" aria-live="polite"></p>
+
+        <div class="actions">
+            <button type="button" id="checkBtn" class="btn btn-secondary">Check only</button>
+            <button type="button" id="importBtn" class="btn btn-primary">Import &amp; save</button>
+            <span class="spacer"></span>
+            <input type="text" id="profileName" maxlength="100" placeholder="Name for this mapping" aria-label="Name for this mapping">
+            <button type="button" id="saveProfileBtn" class="btn btn-ghost">Save mapping</button>
+            <button type="button" id="deleteProfileBtn" class="btn btn-ghost" hidden>Delete saved</button>
+        </div>
     </section>
 
     <section class="card" id="resultCard" hidden>
         <div class="card-head">
             <h2 id="resultTitle">Result</h2>
-            <button type="button" id="resetBtn" class="btn btn-ghost">Upload another file</button>
+            <button type="button" id="resetBtn" class="btn btn-ghost">Import another file</button>
         </div>
         <p id="resultMessage" class="result-message"></p>
         <div class="stats" id="stats"></div>
+        <ul class="warnings" id="warnings" hidden></ul>
 
         <div id="errorsBlock" hidden>
             <div class="card-head">
-                <h3>Rows with errors</h3>
-                <button type="button" id="downloadErrors" class="btn btn-ghost">Download errors (CSV)</button>
+                <h3>Rows with problems</h3>
+                <button type="button" id="downloadErrors" class="btn btn-ghost">Download problems (CSV)</button>
             </div>
             <p class="hint" id="errorsHint"></p>
             <div class="table-wrap"><table class="table" id="errorsTable"></table></div>
         </div>
 
         <div id="previewBlock" hidden>
-            <h3>Preview of valid rows</h3>
+            <h3>Preview of records</h3>
             <div class="table-wrap"><table class="table" id="previewTable"></table></div>
         </div>
     </section>
